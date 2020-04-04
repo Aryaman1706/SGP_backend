@@ -1,0 +1,85 @@
+const express=require('express');
+const mongoose=require('mongoose');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const _ = require('lodash');
+const auth = require('../middleware/auth');
+
+const {User,validate}=require('../model/user');
+
+const router=express.Router();
+
+// to get the currently logined user
+router.get('/me', auth, async (req, res) => {
+    const user = await User.findById(req.user._id).select('-password');
+    res.send(user);
+});
+
+// to get some other user
+router.get('/:id',auth,async(req,res)=>{
+    const user= await User.findById(req.params.id);
+    if(!user) return res.status(404).send('Not Found');
+    res.send(_.pick(user,['username','email']));
+});
+
+router.post('/',async(req,res)=>{
+    const {error}= validate(req.body);
+    if(error) return res.status(400).send(error.details[0].message);
+
+    let user = await User.findOne({ email: req.body.email });
+    if (user) return res.status(400).send('User already registered.');
+
+    // let user=new User({
+    //     username: req.body.username,
+    //     email: req.body.email,
+    //     phone: req.body.phone,
+    //     // password: req.body.password
+    // });
+
+    user = new User(_.pick(req.body, ['username', 'email', 'password','phone','isAdmin']));
+
+    // bcrypt work
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(user.password, salt);
+
+    user=await user.save();
+
+    // jwt work
+    const token = user.generateAuthToken();
+    res
+    .header('x-auth-token', token)
+    .send(_.pick(user, ['_id', 'username', 'email', 'isAdmin']));
+    
+    // res.send(user);
+});
+
+
+// not functional as of now
+
+// to edit the currently logged in user
+router.put('/me', async (req,res)=>{
+    const {error}= validate(req.body);
+    if(error) return res.status(400).send(error.details[0].message);
+    
+
+    const user= await User.findByIdAndUpdate(req.params.id,{
+        username: req.body.username,
+        email: req.body.email,
+        phone: req.body.phone,
+        password: req.body.password
+    },{new:true});
+
+    if(!user) return res.status(404).send('Not Found');
+
+    res.send(user);
+
+});
+
+// to delete account (currently logined)
+router.delete('/me',async (req,res)=>{
+    const user=await User.findByIdAndRemove(req.params.id);
+    if(!user) return res.status(404).send('Not Found');
+    res.send(user);
+});
+
+module.exports=router;

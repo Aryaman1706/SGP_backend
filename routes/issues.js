@@ -17,19 +17,19 @@ router.get('/:id',async (req,res)=>{
     res.send(issue);
 });
 
-router.post('/',async(req,res)=>{
+router.post('/',auth, async(req,res)=>{
     const {error}= validate(req.body);
     if(error) return res.status(400).send(error.details[0].message);
     
-    const user=await User.findById(req.body.userId);
+    const user=await User.findById(req.user._id);
     if(!user) return res.status(400).send('Invalid User');
     let issue=new Issue({
         category: req.body.category,
         subject: req.body.subject,
         statement: req.body.statement,
         user:{
-            _id: user._id,
-            username: user.username,
+            _id: req.user._id,
+            username: req.user.username,
             // email: user.email
         }
     });
